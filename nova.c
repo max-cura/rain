@@ -254,4 +254,33 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg, __n
 
 __nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc, __nv_block_header_t *__block, void *__obj)
 {
+    if (__NV_LIKELY (__nova_tid () == __atomic_load_n (&__block->a__bh_tid, __ATOMIC_SEQ_CST))) {
+        /* % local */
+    } else {
+        /* % global */
+    }
+
+    if (__atomic_sub_fetch (&__block->a__bh_acnt, 1, __ATOMIC_SEQ_CST) == 0) {
+        __nv_lock (&__block->__bh_glck);
+        if (0 == __atomic_load_n (&__block->a__bh_flag, __ATOMIC_SEQ_CST) & __NV_BLHDRFL_LKGHD) {
+            if (__atomic_load_n (&__block->a__bh_acnt, __ATOMIC_SEQ_CST) == 0) {
+                void *__cfpl = __block->__bh_fpl, __cfpg = __block->gl__bh_fpg;
+                __block->__bh_fpl = NULL;
+                __block->gl__bh_fpg = NULL;
+                __nv_unlock (&__block->__bh_glck);
+                __nv_lkg_t *__lkgcache = __atomic_load_n (&__block->gl__bh_lkg, __ATOMIC_SEQ_CST);
+                __nv_lock (&__lkgcache->lkg_ll);
+                __nv_lock (&__block->__bh_glck);
+                __block->__bh_fpl = __cfpl;
+                __block->gl__bh_fpg = __cfpg;
+                return __nv_block_requests_lift (__alloc, __lkgcache, __block);
+            } else {
+                __nv_unlock (&__block->__bh_glck);
+                return __NVR_OK;
+            }
+        } else {
+            __nv_unlock (&__block->__bh_glck);
+            return __NVR_OK;
+        }
+    }
 }
