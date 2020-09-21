@@ -23,6 +23,7 @@ typedef enum {
     __NVR_ALLOC = 200,
     __NVR_ALLOC_OSIZE = __NVR_ALLOC + 0,
     __NVR_ALLOC_UNSIZED = __NVR_ALLOC + 1,
+    __NVR_ALLOC_SPOILED_PROMOTEE = __NVR_ALLOC + 2,
 } __nvr_t;
 #define __nvr_iserr(e) (__NVR_FAIL < (e))
 

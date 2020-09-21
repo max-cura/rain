@@ -41,8 +41,8 @@ __nvr_t __nv_chunk_populate (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk)
         __nv_block_bind (__alloc, __choff);
         /* Next block.
          */
-        choff += sizeof (__nv_block_header_t);
-        choff += __alloc->__al__blksz;
+        __choff += sizeof (__nv_block_header_t);
+        __choff += __alloc->__al__blksz;
     }
     /* Pass blocks in batch to allocator.
      */
@@ -84,6 +84,7 @@ __nvr_t __nv_chunk_delete_propagate (__nv_allocator_t *__alloc, __nv_chunk_t *__
         }
         __chunk = __tmp__chlsnx;
     } while (__chunk != NULL);
+    return __NVR_OK;
 }
 
 __nvr_t __nv_block_bind (__nv_allocator_t *__alloc, void *__blmem)
@@ -156,7 +157,14 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg, __n
         __nv_unlock (&__tmbpl->__bh_glck);
         __nv_unlock (&__lkg->lkg_ll);
         /* Guarantee: freshly dropped block is always alloc-able */
+#if __NVC_PROMOTE_GUARANTEE_FAILURES
+        __nvr_t r = __nv_block_alloc_object (__alloc, __tmpbl, __obj);
+        if (r == __NVR_FAIL)
+            return __NVR_ALLOC_SPOILED_PROMOTEE;
+        return r;
+#else
         return __nv_block_alloc_object (__alloc, __tmpbl, __obj);
+#endif
     }
 
     /* STANDARD CASE */
@@ -219,7 +227,14 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg, __n
             __nv_unlock (&__lkg->lkg_ll);
 
             /* Guarantee: freshly promoted block is always alloc-able */
+#if __NVC_PROMOTE_GUARANTEE_FAILURES
+            __nvr_t r = __nv_block_alloc_object (__alloc, __blcache->ll__bh_chnx, __obj);
+            if (r == __NVR_FAIL)
+                return __NVR_ALLOC_SPOILED_PROMOTEE;
+            return r;
+#else
             return __nv_block_alloc_object (__alloc, __blcache->ll_bh_chnx, __obj);
+#endif
         }
     }
 
@@ -249,13 +264,43 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg, __n
     __nv_unlock (&__lkg->lkg_ll);
 
     /* Guarantee: freshly promoted block is always alloc-able */
+#if __NVC_PROMOTE_GUARANTEE_FAILURES
+    __nvr_t r = __nv_block_alloc_object (__alloc, __tmpbl, __obj);
+    if (r == __NVR_FAIL)
+        return __NVR_ALLOC_SPOILED_PROMOTEE;
+    return r;
+#else
     return __nv_block_alloc_object (__alloc, __tmpbl, __obj);
+#endif
+}
+
+__nvr_t __nv_block_alloc_object (__nv_allocator_t *__alloc, __nv_block_header_t *__block, void **__obj)
+{
+    if (__NV_LIKELY (__block->__bh_fpl != NULL)) {
+        return __nv_block_alloc_object_inner (__alloc, __block, __obj);
+    } else {
+        __nv_lock (&__block->__bh_glck);
+        /* works on x86-64 */
+        /* note: we don't actually want this to be atomic; luckily enough,
+         * this just evaluates to a pair of `mov`s and an `xchg` */
+        __block->__bh_fpl = __atomic_exchange_n (&__block->__bh_fpg, NULL, __ATOMIC_SEQ_CST);
+        __nv_unlock (&__block->__bh_glck);
+        if (__NV_LIKELY (__block->__bh_fpl != NULL)) {
+            return __nv_block_alloc_object_inner (__alloc, __block, __obj);
+        }
+        return __NVR_FAIL;
+    }
+}
+
+__nvr_t __nv_block_alloc_object_inner (__nv_allocator_t *__alloc, __nv_block_header_t *__block, void **__obj)
+{
 }
 
 __nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc, __nv_block_header_t *__block, void *__obj)
 {
     if (__NV_LIKELY (__nova_tid () == __atomic_load_n (&__block->a__bh_tid, __ATOMIC_SEQ_CST))) {
         /* % local */
+
     } else {
         /* % global */
     }
@@ -268,11 +313,13 @@ __nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc, __nv_block_header_
                 __block->__bh_fpl = NULL;
                 __block->gl__bh_fpg = NULL;
                 __nv_unlock (&__block->__bh_glck);
+                /* the gap */
                 __nv_lkg_t *__lkgcache = __atomic_load_n (&__block->gl__bh_lkg, __ATOMIC_SEQ_CST);
                 __nv_lock (&__lkgcache->lkg_ll);
                 __nv_lock (&__block->__bh_glck);
                 __block->__bh_fpl = __cfpl;
                 __block->gl__bh_fpg = __cfpg;
+                /* BRL takes care of unlocking procedures */
                 return __nv_block_requests_lift (__alloc, __lkgcache, __block);
             } else {
                 __nv_unlock (&__block->__bh_glck);
