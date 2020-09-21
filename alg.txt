@@ -1,0 +1,70 @@
+lkg.alloc-object
+    % caller is owning thread
+    [load LACT] is null,                "LACT will not spuriously change from a null state to a non-null state"
+        <LL>
+            heap.get-block              "block is <GL>"
+            {block} set TID, BL_LKGP
+            {block}:BLFL set ISHEAD
+            LACT insert
+        try *block.alloc-object
+        | fail -> error                 "newly requested block cannot be full"
+    try block.alloc-object
+    | fail
+        <LL>
+            [load LACT]                 "LACT will only change during lkg.alloc-object"
+            ;; SLIDE
+            LACT:NXBL not null,
+                <LACT:GLCK> <LACT:NXBL:GLCK>
+                    [unset ISHEAD LACT:BLFL]
+                    [set ISHEAD LACT:NXBL:BLFL]
+                try *block.alloc-object
+                | fail -> error         "LACT:NXBL cannot be full"
+            ;; /SLIDE
+            <LACT:GLCK>
+                heap.get-block          "block is <GL>"
+                {block} set TID, BL_LKGP
+                {block}:BLFL set ISHEAD
+                LACT insert
+                try *block.alloc-object
+                | fail -> error         "newly requested block cannot be full"
+
+block.alloc-object
+    % caller is owning thread
+    FPL not null,
+        block.alloc-object-local
+    <GLCK>
+        nullcheck FPG
+        swap FPL, FPG
+        block.alloc-object-local
+    [inc ACNT]
+
+;; CONSTRAINT: DEALLOCATION CANNOT OCCUR WHILE BLFL/ISHEAD IS INVALID
+block.dealloc-object
+    [load TID]
+    check TID against calling
+    | global,
+        <GLCK>
+            FPG extend
+    | local,
+        FPL extend
+    ;; EMPTY CHECK
+    [dec ACNT] is 0,
+        <++GL++>
+        [load BLFL] not ISHEAD,
+            [load ACNT] is 0,
+                push FPL, FPG
+                clear FPL, FPG
+                <--GL-->
+                [load BL_LKGP]
+                ;; QUESTION: BL_LKGP invalidation?
+                ;; invalidates on this path (PUSH)
+                ;;      we'd have to have an allocation first, which would mean HEAD movement, i.e. PULL->head or SLIDE->head
+                ;;      PULL->head checks for spurious FPL/G clearing
+                ;;      SLIDE->head checks for spurious FPL/G clearing
+                ;; invalidates on PULL->head
+                ;;      PULL->head checks for spurious FPL/G clearing
+                ;; not a problem
+                <BL_LKGP::LL>
+                    -- [load BL_LKGP] not ISHEAD,       ;; UNNECESSARY due to constraint & interlock w/ heap.get-block
+                    <GL>
+                        {block}.yield-to-lkg BL_LKGP    ;; either POKEs or PUSHes   

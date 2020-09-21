@@ -1,0 +1,13 @@
+#
+# file build.ninja
+# author Maximilien M. Cura
+#
+
+cc = /usr/local/opt/llvm/bin/clang
+cflags = -Wall -Wextra -Werror -g -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe -I.
+
+rule cc
+    command = ccache $cc $cflags $in -o $out
+
+build nova: cc nova.c | nova.h
+
