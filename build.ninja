@@ -4,7 +4,7 @@
 #
 
 cc = /usr/local/opt/llvm/bin/clang
-cflags = -Wall -Wextra -Werror -g -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe -I.
+cflags = -Wall -Wextra -g -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe -I. -Wno-unused-parameter
 
 rule cc
     command = ccache $cc $cflags $in -o $out

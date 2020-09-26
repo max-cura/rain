@@ -1,4 +1,5 @@
 *.swp
 nova
 .ninja_*
-
+.idea
+cmake-build-debug
