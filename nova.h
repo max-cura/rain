@@ -19,11 +19,13 @@ typedef enum {
 
     __NVR_OS = 100,
     __NVR_OS_ALLOC = __NVR_OS + 0,
+    __NVR_OS_ALIGN = __NVR_OS + 1,
 
     __NVR_ALLOC = 200,
     __NVR_ALLOC_OSIZE = __NVR_ALLOC + 0,
     __NVR_ALLOC_UNSIZED = __NVR_ALLOC + 1,
     __NVR_ALLOC_SPOILED_PROMOTEE = __NVR_ALLOC + 2,
+    __NVR_ALLOC_LKG_IDX_RANGE = __NVR_ALLOC + 3,
 
     __NVR_SYNC = 1000,
     __NVR_TID = __NVR_SYNC,
@@ -47,9 +49,12 @@ typedef struct
 } __nv_lock_t;
 
 __nvr_t __nv_lock_init (__nv_lock_t *lock);
+__nvr_t __nv_lock_destroy (__nv_lock_t *lock);
 __nvr_t __nv_lock (__nv_lock_t *lock);
 __nvr_t __nv_unlock (__nv_lock_t *lock);
 
+/* aligned(8) might actually slow things down (cache eviction)
+ */
 typedef struct __attribute__ ((packed, aligned (8))) __nv_block_header_s
 {
     void *__bh_fpl;
@@ -110,20 +115,18 @@ typedef struct
 {
     __nv_tidmgr_recylsch_t *__recyls;
     uint64_t __recylsmono;
-    __nv_lock_t __recylslck;
 } __nv_tidmgr_recycling_t;
 
 typedef struct
 {
     uint64_t __mono;
-    __nv_lock_t __monolck;
 } __nv_tidmgr_monotonic_t;
 
 typedef struct
 {
-    _Thread_local uint64_t __tidml;
     void *__tidmun;
     uint64_t __tidmfl;
+    __nv_lock_t __tidlck;
 } __nv_tidmgr_t;
 #define __NV_TIDSYS_LAZY 0x01ul
 #define __NV_TIDSYS_RECYCLING 0x02ul
@@ -131,12 +134,18 @@ typedef struct
 
 #define __NV_NULL_TID 0ul
 
-__nvr_t __nv_tid_thread_init (__nv_tidmgr_t *__mgr);
-__nvr_t __nv_tid_thread_destroy (__nv_tidmgr_t *__mgr);
-__nvr_t __nv_tid_sys_init (__nv_tidmgr_t **__mgr, uint64_t __fl);
-__nvr_t __nv_tid_sys_destroy (__nv_tidmgr_t *__mgr);
-uint64_t __nv_tid (__nv_tidmgr_t *__mgr);
-__nvr_t __nv_tid_state (__nv_tidmgr_t *__mgr);
+__nvr_t __nv_os_set_smalloc_agent (__nv_allocator_t *__alloc);
+__nvr_t __nv_os_smalloc (void **__mem, size_t size);
+__nvr_t __nv_os_smdealloc (void **__mem, size_t size);
+__nvr_t __nv_os_challoc (__nv_allocator_t *__alloc, void **__mem);
+__nvr_t __nv_os_chdealloc (__nv_allocator_t *__alloc, void *__mem, size_t __size);
+
+__nvr_t __nv_tid_thread_init ();
+__nvr_t __nv_tid_thread_destroy ();
+__nvr_t __nv_tid_sys_init (uint64_t __fl);
+__nvr_t __nv_tid_sys_destroy ();
+uint64_t __nv_tid ();
+__nvr_t __nv_tid_state ();
 
 __nvr_t __nv_chunk_new (__nv_allocator_t *__alloc, __nv_chunk_t **__chunk);
 __nvr_t __nv_chunk_populate (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk);

@@ -4,10 +4,24 @@
 #
 
 cc = /usr/local/opt/llvm/bin/clang
-cflags = -Wall -Wextra -g -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe -I. -Wno-unused-parameter
+cflags = -Wall -Wextra -g3 -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe $
+    -fdollars-in-identifiers -finline-functions -fno-ms-compatibility -fno-rtti -I. $
+    -Wno-unused-parameter $
+    -Wno-unused-command-line-argument -Wno-nullability-completeness -Wno-expansion-to-defined -Wall -Wextra
+ldflags = -g3 -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe $
+    --flto=thin --lto-jobs=6 -fsplit-lto-unit -fwhole-program-vtables -Wl,-cache_path_lto,${CACHE_DIR} $
+    -fdollars-in-identifiers -finline-functions -fno-ms-compatibility -fno-rtti $
+    -fvisibility=hidden -fnobuiltininc
 
 rule cc
-    command = ccache $cc $cflags $in -o $out
+    command = ccache $cc -c $cflags $in -o $out
+rule link
+    command = ccache $cc $ldflags $in -o $out
 
-build nova: cc nova.c | nova.h
+build nova.o: cc nova.c | nova.h
+build nova-os.o: cc nova-os.c | nova.h
+build nova-tid.o: cc nova-tid.c | nova.h
+build nova-fast.o: cc nova-fast.c | nova.h
+build nova: link $
+    nova.o nova-os.o nova-tid.o nova-fast.o
 
