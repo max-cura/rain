@@ -16,6 +16,7 @@ typedef enum {
 
     __NVR_COMMON = 2,
     __NVR_INVALP = __NVR_COMMON + 0,
+    __NVR_CACHEINVAL = __NVR_COMMON + 1,
 
     __NVR_OS = 100,
     __NVR_OS_ALLOC = __NVR_OS + 0,
@@ -26,6 +27,7 @@ typedef enum {
     __NVR_ALLOC_UNSIZED = __NVR_ALLOC + 1,
     __NVR_ALLOC_SPOILED_PROMOTEE = __NVR_ALLOC + 2,
     __NVR_ALLOC_LKG_IDX_RANGE = __NVR_ALLOC + 3,
+    __NVR_ALLOC_SPOILED_CHUNK = __NVR_ALLOC + 4,
 
     __NVR_SYNC = 1000,
     __NVR_TID = __NVR_SYNC,
@@ -103,6 +105,8 @@ typedef struct
     size_t __al_blksz;
     size_t __al_hpnlkg;
     size_t (*__al_lkgdistrat) (size_t);
+    size_t __al_permtrytplvalloc;
+    __nv_heap_t *__al_ghp;
 } __nv_allocator_t;
 
 typedef struct __nv_tidmgr_recylsch
@@ -138,7 +142,8 @@ __nvr_t __nv_os_set_smalloc_agent (__nv_allocator_t *__alloc);
 __nvr_t __nv_os_smalloc (void **__mem, size_t size);
 __nvr_t __nv_os_smdealloc (void **__mem, size_t size);
 __nvr_t __nv_os_challoc (__nv_allocator_t *__alloc, void **__mem);
-__nvr_t __nv_os_chdealloc (__nv_allocator_t *__alloc, void *__mem, size_t __size);
+__nvr_t __nv_os_chdealloc (__nv_allocator_t *__alloc, void *__mem,
+                           size_t __size);
 
 __nvr_t __nv_tid_thread_init ();
 __nvr_t __nv_tid_thread_destroy ();
@@ -149,8 +154,12 @@ __nvr_t __nv_tid_state ();
 
 __nvr_t __nv_chunk_new (__nv_allocator_t *__alloc, __nv_chunk_t **__chunk);
 __nvr_t __nv_chunk_populate (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk);
-__nvr_t __nv_chunk_delete (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk, __nv_chunk_t **__chunk_mknx);
-__nvr_t __nv_chunk_delete_propagate (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk, __nv_chunk_t **__errch, __nv_chunk_t **__errtl);
+__nvr_t __nv_chunk_delete (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk,
+                           __nv_chunk_t **__chunk_mknx);
+__nvr_t __nv_chunk_delete_propagate (__nv_allocator_t *__alloc,
+                                     __nv_chunk_t *__chunk,
+                                     __nv_chunk_t **__errch,
+                                     __nv_chunk_t **__errtl);
 
 /* \caller __nv_chunk_populate
  * \expect appropriate linkages pre-locked by __nv_chunk_populate's
@@ -158,14 +167,31 @@ __nvr_t __nv_chunk_delete_propagate (__nv_allocator_t *__alloc, __nv_chunk_t *__
  *          up invoking a chunk allocation, the request will not incur
  *          spurious failures due to block snatching.
  */
-__nvr_t __nv_chunk_yields_block_batch_locked (__nv_allocator_t *, void *, size_t);
+__nvr_t __nv_chunk_yields_block_batch_locked (__nv_allocator_t *,
+                                              void *, size_t);
 
-__nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg, __nv_heap_t *__heap, void **__obj);
+size_t __nv_rlslup(__nv_allocator_t *__alloc, size_t __lkgidx);
 
-__nvr_t __nv_block_bind (__nv_allocator_t *__alloc, void *__blmem);
-__nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc, __nv_block_header_t *__blockh, void *__obj);
-__nvr_t __nv_block_alloc_object_inner (__nv_allocator_t *__alloc, __nv_block_header_t *__blockh, void **__obj);
-__nvr_t __nv_block_alloc_object (__nv_allocator_t *__alloc, __nv_block_header_t *__blockh, void **__obj);
+__nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
+                               __nv_heap_t *__heap, void **__obj);
+__nvr_t __nv_lkg_req_block_from_heap (__nv_allocator_t *__alloc,
+                                      __nv_heap_t *__heap,
+                                      size_t __lkg_idx,
+                                      __nv_block_header_t **__blockhp);
+
+__nvr_t __nv_block_init (__nv_allocator_t *__alloc, void *__blmem);
+__nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc,
+                                   __nv_block_header_t *__blockh,
+                                   void *__obj);
+__nvr_t __nv_block_alloc_object_inner (__nv_allocator_t *__alloc,
+                                       __nv_block_header_t *__blockh,
+                                       void **__obj);
+__nvr_t __nv_block_alloc_object (__nv_allocator_t *__alloc,
+                                 __nv_block_header_t *__blockh,
+                                 void **__obj);
+__nvr_t __nv_block_requests_lift(__nv_allocator_t *__alloc,
+                                  __nv_lkg_t *__origin_lkg,
+                                  __nv_block_header_t *__block);
 
 #define __NV_LIKELY(x) __builtin_expect (!!(x), 1)
 #define __NV_UNLIKELY(x) __builtin_expect (!!(x), 0)

@@ -3,40 +3,65 @@
 // author Maximilien M. Cura
 //
 
+/* FILE nova-tid.c
+ * DESC Facilities for working with thread identification to enable thread
+ * differentiation in the allocator.
+ */
+
 #include "nova.h"
 #include <sys/mman.h>
 #include <string.h>
 
-static _Thread_local uint64_t __nv_tidml__;
+/* VAR __nv_tidml__@nova-tid.c
+ * DESC Thread-local variable containing the current thread's thread id, or
+ *  __NV_NULL_TID
+ */
+static _Thread_local uint64_t __nv_tidml__ = __NV_NULL_TID;
+/* VAR __nv_tidmgr__@nova-tid.c
+ * DESC Default thread id manager.
+ */
 static __nv_tidmgr_t __nv_tidmgr__;
 
+/* FUNC __nv_tid_thread_init_mono
+ * DESC Per-thread monotonic thread ID initialization.
+ */
 __nvr_t __nv_tid_thread_init_mono ()
 {
     __nv_lock (&__nv_tidmgr__.__tidlck);
-    if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_SEQ_CST) & __NV_TIDSYS_MONOEXHAUSTED) {
+    /* If the monotonic counter is in an exhausted state, then ignore. */
+    if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_SEQ_CST)
+        & __NV_TIDSYS_MONOEXHAUSTED) {
         __nv_unlock (&__nv_tidmgr__.__tidlck);
         return __NVR_TID_INSUFFICIENT_TIDS;
     }
-    uint64_t *__mono = &((__nv_tidmgr_monotonic_t *)(__nv_tidmgr__.__tidmun))->__mono;
-    __nv_tidml__ = (*__mono)++;
-    if (__nv_tidml__ == 0) {
-        /* so that subsequent calls also error */
-        __atomic_or_fetch (&__nv_tidmgr__.__tidmfl, __NV_TIDSYS_MONOEXHAUSTED, __ATOMIC_SEQ_CST);
+    __nv_tidml__ = __atomic_fetch_add (
+        &(((__nv_tidmgr_monotonic_t *)(__nv_tidmgr__.__tidmun))->__mono),
+        1lu, __ATOMIC_SEQ_CST);
+    /* Overflow check */
+    if (__NV_UNLIKELY (__nv_tidml__ == 0lu)) {
+        /* so that subsequent calls also error, put the manager into an
+         * exhausted state*/
+        __atomic_or_fetch (&__nv_tidmgr__.__tidmfl, __NV_TIDSYS_MONOEXHAUSTED,
+                           __ATOMIC_SEQ_CST);
+        __nv_unlock (&__nv_tidmgr__.__tidlck);
+        return __NVR_TID_INSUFFICIENT_TIDS;
+    }
 
-        __nv_unlock (&__nv_tidmgr__.__tidlck);
-        return __NVR_TID_INSUFFICIENT_TIDS;
-    }
     __nv_unlock (&__nv_tidmgr__.__tidlck);
     return __NVR_OK;
 }
 
 __nvr_t __nv_tid_thread_destroy_mono ()
 {
+#if 0
     /* cheap, so why not? */
-    __atomic_compare_exchange_n (&((__nv_tidmgr_monotonic_t *)(__nv_tidmgr__.__tidmun))->__mono,
-                                 &__nv_tidml__,
-                                 __nv_tidml__ - 1,
-                                 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    __atomic_compare_exchange_n (
+        &((__nv_tidmgr_monotonic_t *)(__nv_tidmgr__.__tidmun))
+             ->__mono,
+        &__nv_tidml__,
+        __nv_tidml__ - 1,
+        0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+#endif
     __nv_tidml__ = __NV_NULL_TID;
     return __NVR_OK;
 }

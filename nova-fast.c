@@ -127,6 +127,7 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg, __n
             /* swap head flag */
             __atomic_and_fetch (&__blcache->a__bh_flag, ~__NV_BLHDRFL_LKGHD, __ATOMIC_SEQ_CST);
             __atomic_or_fetch (&__blcache->ll__bh_chnx->a__bh_flag, __NV_BLHDRFL_LKGHD, __ATOMIC_SEQ_CST);
+            __blcache->gl__bh_lkg = __lkg;
             /* chain is preserved, just gotta move the active */
             __atomic_store_n (&__lkg->lla__lkg_active, __blcache->ll__bh_chnx, __ATOMIC_SEQ_CST);
 
@@ -209,12 +210,15 @@ __nvr_t __nv_block_alloc_object (__nv_allocator_t *__alloc, __nv_block_header_t 
 __nvr_t __nv_block_alloc_object_inner (__nv_allocator_t *__alloc, __nv_block_header_t *__blockh, void **__obj)
 {
     (*__obj) = __blockh->__bh_fpl;
+    __blockh->__bh_fpl = *(uint64_t *)(*__obj);
+#if 0
     uint16_t __nxoff = *(uint16_t *)(*__obj);
     if (__NV_LIKELY (__nxoff != 0xffff)) {
         __blockh->__bh_fpl = (uint8_t *)__blockh + __NV_BLOCK_MEMORY_OFFSET + __nxoff;
     } else /* % __nxoff == 0xffff */ {
         __blockh->__bh_fpl = NULL;
     }
+#endif
     /* inner section, no checking */
     __atomic_add_fetch (&__blockh->a__bh_acnt, 1, __ATOMIC_SEQ_CST);
 
@@ -227,16 +231,21 @@ __nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc, __nv_block_header_
     /* TID invalidation is a non-problem. */
     if (__NV_LIKELY (__nv_tid () == __atomic_load_n (&__blockh->a__bh_tid, __ATOMIC_SEQ_CST))) {
         /* % local */
+        *(uint64_t *)__obj = __blockh->__bh_fpl;
+#if 0
         if (__NV_LIKELY (__blockh->__bh_fpl != NULL)) {
-            *(uint16_t *)__obj = (uint8_t *)__blockh->__bh_fpl - ((uint8_t *)__blockh + __NV_BLOCK_MEMORY_OFFSET);
+             *(uint16_t *)__obj = (uint8_t *)__blockh->__bh_fpl - ((uint8_t *)__blockh + __NV_BLOCK_MEMORY_OFFSET);
             __blockh->__bh_fpl = __obj;
         } else {
-            *(uint16_t *)__obj = 0xffff;
+             *(uint16_t *)__obj = 0xffff;
             __blockh->__bh_fpl = __obj;
         }
+#endif
     } else {
         /* % global */
         __nv_lock (&__blockh->__bh_glck);
+        *(uint64_t *)__obj = __blockh->gl__bh_fpg;
+#if 0
         {
             if (__NV_LIKELY (__blockh->gl__bh_fpg != NULL)) {
                 *(uint16_t *)__obj = (uint8_t *)__blockh->gl__bh_fpg - ((uint8_t *)__blockh + __NV_BLOCK_MEMORY_OFFSET);
@@ -246,6 +255,7 @@ __nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc, __nv_block_header_
                 __blockh->gl__bh_fpg = __obj;
             }
         }
+#endif
         __nv_unlock (&__blockh->__bh_glck);
     }
 
