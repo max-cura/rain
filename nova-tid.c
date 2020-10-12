@@ -35,8 +35,8 @@ __nvr_t __nv_tid_thread_init_mono ()
         return __NVR_TID_INSUFFICIENT_TIDS;
     }
     __nv_tidml__ = __atomic_fetch_add (
-        &(((__nv_tidmgr_monotonic_t *)(__nv_tidmgr__.__tidmun))->__mono),
-        1lu, __ATOMIC_SEQ_CST);
+        &(((__nv_tidmgr_monotonic_t *)(__nv_tidmgr__.__tidmun))->__mono), 1lu,
+        __ATOMIC_SEQ_CST);
     /* Overflow check */
     if (__NV_UNLIKELY (__nv_tidml__ == 0lu)) {
         /* so that subsequent calls also error, put the manager into an
@@ -68,22 +68,26 @@ __nvr_t __nv_tid_thread_destroy_mono ()
 
 __nvr_t __nv_tidrecyls_newch (__nv_tidmgr_recylsch_t **__recyls)
 {
-    (*__recyls) = mmap (NULL, 0x4000, (unsigned)PROT_READ | (unsigned)PROT_WRITE, MAP_ANON, /* spec'd */ -1, 0);
-    if ((*__recyls) == MAP_FAILED) {
-        return __NVR_OS_ALLOC;
-    }
+    (*__recyls)
+        = mmap (NULL, 0x4000, (unsigned)PROT_READ | (unsigned)PROT_WRITE,
+                MAP_ANON, /* spec'd */ -1, 0);
+    if ((*__recyls) == MAP_FAILED) { return __NVR_OS_ALLOC; }
     (*__recyls)->__tidrecylschidx = 0;
-    memset (&(*__recyls)->__tidrecylschtids, 0, sizeof (*__recyls)->__tidrecylschtids);
+    memset (&(*__recyls)->__tidrecylschtids, 0,
+            sizeof (*__recyls)->__tidrecylschtids);
     (*__recyls)->__tidrecylschnx = NULL;
     return __NVR_OK;
 }
 
 __nvr_t __nv_tid_thread_init_recy ()
 {
-    __nv_tidmgr_recycling_t *__rmgr = (__nv_tidmgr_recycling_t *)(__nv_tidmgr__.__tidmun);
+    __nv_tidmgr_recycling_t *__rmgr
+        = (__nv_tidmgr_recycling_t *)(__nv_tidmgr__.__tidmun);
     __nv_lock (&__nv_tidmgr__.__tidlck);
     if (__rmgr->__recyls != NULL) {
-        __nv_tidml__ = __rmgr->__recyls->__tidrecylschtids[__rmgr->__recyls->__tidrecylschidx--];
+        __nv_tidml__
+            = __rmgr->__recyls
+                  ->__tidrecylschtids[__rmgr->__recyls->__tidrecylschidx--];
         if (__rmgr->__recyls->__tidrecylschidx == 0) {
             /* chop-at-end */
             __nv_tidmgr_recylsch_t *__swap = __rmgr->__recyls->__tidrecylschnx;
@@ -93,7 +97,8 @@ __nvr_t __nv_tid_thread_init_recy ()
         __nv_unlock (&__nv_tidmgr__.__tidlck);
         return __NVR_OK;
     } else {
-        __nv_tidml__ = __atomic_add_fetch (&__rmgr->__recylsmono, 1, __ATOMIC_SEQ_CST);
+        __nv_tidml__
+            = __atomic_add_fetch (&__rmgr->__recylsmono, 1, __ATOMIC_SEQ_CST);
         if (__nv_tidml__ == 0) {
             __nv_unlock (&__nv_tidmgr__.__tidlck);
             return __NVR_TID_INSUFFICIENT_TIDS;
@@ -105,7 +110,8 @@ __nvr_t __nv_tid_thread_init_recy ()
 
 __nvr_t __nv_tid_thread_destroy_recy ()
 {
-    __nv_tidmgr_recycling_t *__rmgr = (__nv_tidmgr_recycling_t *)(__nv_tidmgr__.__tidmun);
+    __nv_tidmgr_recycling_t *__rmgr
+        = (__nv_tidmgr_recycling_t *)(__nv_tidmgr__.__tidmun);
     __nv_lock (&__nv_tidmgr__.__tidlck);
     if (__rmgr->__recyls == NULL) {
         __nvr_t r = __nv_tidrecyls_newch (&__rmgr->__recyls);
@@ -123,7 +129,8 @@ __nvr_t __nv_tid_thread_destroy_recy ()
         __rmgr->__recyls->__tidrecylschnx = __swap;
     }
     uint64_t __returning = __nv_tidml__;
-    __rmgr->__recyls->__tidrecylschtids[__rmgr->__recyls->__tidrecylschidx++] = __returning;
+    __rmgr->__recyls->__tidrecylschtids[__rmgr->__recyls->__tidrecylschidx++]
+        = __returning;
     __nv_tidml__ = __NV_NULL_TID;
 
     __nv_unlock (&__nv_tidmgr__.__tidlck);
@@ -132,10 +139,12 @@ __nvr_t __nv_tid_thread_destroy_recy ()
 
 __nvr_t __nv_tid_thread_init ()
 {
-    if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED) & __NV_TIDSYS_LAZY) {
+    if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED)
+        & __NV_TIDSYS_LAZY) {
         return __NVR_OK;
     } else {
-        if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED) & __NV_TIDSYS_RECYCLING) {
+        if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED)
+            & __NV_TIDSYS_RECYCLING) {
             return __nv_tid_thread_init_recy ();
         } else {
             return __nv_tid_thread_init_mono ();
@@ -145,7 +154,8 @@ __nvr_t __nv_tid_thread_init ()
 
 __nvr_t __nv_tid_thread_destroy ()
 {
-    if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED) & __NV_TIDSYS_RECYCLING) {
+    if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED)
+        & __NV_TIDSYS_RECYCLING) {
         return __nv_tid_thread_destroy_recy ();
     } else {
         return __nv_tid_thread_destroy_mono ();
@@ -158,10 +168,8 @@ __nvr_t __nv_tid_sys_init (uint64_t __fl)
     __nv_tidml__ = __NV_NULL_TID;
     if (__fl & __NV_TIDSYS_RECYCLING) {
         __nv_tidmgr_recycling_t *__rmgr;
-        const __nvr_t r = __nv_os_smalloc (&__rmgr, sizeof *__rmgr);
-        if (__nvr_iserr (r)) {
-            return r;
-        }
+        const __nvr_t r = __nv_os_smalloc ((void **)&__rmgr, sizeof *__rmgr);
+        if (__nvr_iserr (r)) { return r; }
         __rmgr->__recyls = NULL;
         __nv_lock_init (&__nv_tidmgr__.__tidlck);
         __rmgr->__recylsmono = 0;
@@ -169,10 +177,8 @@ __nvr_t __nv_tid_sys_init (uint64_t __fl)
         return __NVR_OK;
     } else {
         __nv_tidmgr_monotonic_t *__mmgr;
-        const __nvr_t r = __nv_os_smalloc (&__mmgr, sizeof *__mmgr);
-        if (__nvr_iserr (r)) {
-            return r;
-        }
+        const __nvr_t r = __nv_os_smalloc ((void **)&__mmgr, sizeof *__mmgr);
+        if (__nvr_iserr (r)) { return r; }
         __nv_lock_init (&__nv_tidmgr__.__tidlck);
         __mmgr->__mono = 0;
         return __NVR_OK;
@@ -181,21 +187,25 @@ __nvr_t __nv_tid_sys_init (uint64_t __fl)
 
 __nvr_t __nv_tid_sys_destroy ()
 {
-    if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED) & __NV_TIDSYS_RECYCLING) {
+    if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED)
+        & __NV_TIDSYS_RECYCLING) {
         /* destroy free lists */
-        __nv_tidmgr_recylsch_t *__crecylsch = ((__nv_tidmgr_recycling_t *)(__nv_tidmgr__.__tidmun))->__recyls,
-                               *__swap;
+        __nv_tidmgr_recylsch_t *__crecylsch
+            = ((__nv_tidmgr_recycling_t *)(__nv_tidmgr__.__tidmun))->__recyls,
+            *__swap;
         while (__crecylsch != NULL) {
             __swap = __crecylsch->__tidrecylschnx;
             munmap (__crecylsch, 0x4000);
             __crecylsch = __swap;
         }
         __nv_lock_destroy (&__nv_tidmgr__.__tidlck);
-        __nv_os_smdealloc (__nv_tidmgr__.__tidmun, sizeof (__nv_tidmgr_recycling_t));
+        __nv_os_smdealloc (__nv_tidmgr__.__tidmun,
+                           sizeof (__nv_tidmgr_recycling_t));
         return __NVR_OK;
     } else {
         __nv_lock_destroy (&__nv_tidmgr__.__tidlck);
-        __nv_os_smdealloc (__nv_tidmgr__.__tidmun, sizeof (__nv_tidmgr_monotonic_t));
+        __nv_os_smdealloc (__nv_tidmgr__.__tidmun,
+                           sizeof (__nv_tidmgr_monotonic_t));
         return __NVR_OK;
     }
 }
@@ -203,7 +213,9 @@ __nvr_t __nv_tid_sys_destroy ()
 
 uint64_t __nv_tid ()
 {
-    if (__nv_tidml__ == __NV_NULL_TID && __atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED) & __NV_TIDSYS_LAZY) {
+    if (__nv_tidml__ == __NV_NULL_TID
+        && __atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_RELAXED)
+               & __NV_TIDSYS_LAZY) {
         __nv_tid_thread_init ();
     }
     return __nv_tidml__;
@@ -211,7 +223,8 @@ uint64_t __nv_tid ()
 __nvr_t __nv_tid_state ()
 {
     if (__nv_tidml__ == __NV_NULL_TID) {
-        if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_SEQ_CST) & __NV_TIDSYS_MONOEXHAUSTED) {
+        if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_SEQ_CST)
+            & __NV_TIDSYS_MONOEXHAUSTED) {
             return __NVR_TID_INSUFFICIENT_TIDS;
         } else {
             return __NVR_TID_THR_UNINITIALIZED;

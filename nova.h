@@ -74,14 +74,14 @@ typedef struct __attribute__ ((packed, aligned (8))) __nv_block_header_s
     void *gl__bh_fpg;
     __nv_lock_t __bh_glck;
 } __nv_block_header_t;
-#define __NV_BLHDRFL_LKGHD 0x01ul
+#define __NV_BLHDRFL_LKGHD 0x01
 #define __NV_BLHDRSZ (sizeof (__nv_block_header_t))
 
 typedef struct
 {
     __nv_block_header_t *lla__lkg_active;
-    __nv_lock_t lkg_ll;
-    size_t lkg_idx;
+    __nv_lock_t __lkg_ll;
+    size_t __lkg_idx;
     size_t ll__lkg_nblk;
 } __nv_lkg_t;
 
@@ -99,14 +99,23 @@ typedef struct
     size_t __ch_nbyt;
 } __nv_chunk_t;
 
-typedef struct
+typedef enum {
+    __NVH_LSLUP = 0,
+    __NVH_RLSLUP,
+    __NVH_CAN_TAKE_BLOCK,
+    __NVH_NHEURISTICS,
+} __nv_heuristic_t;
+
+typedef struct __nv_allocator_s
 {
     size_t __al_chsz;
     size_t __al_blksz;
     size_t __al_hpnlkg;
-    size_t (*__al_lkgdistrat) (size_t);
     size_t __al_permtrytplvalloc;
     __nv_heap_t *__al_ghp;
+    __nv_chunk_t *__al_chls;
+
+    void *__al_ht[__NVH_NHEURISTICS];
 } __nv_allocator_t;
 
 typedef struct __nv_tidmgr_recylsch
@@ -170,7 +179,14 @@ __nvr_t __nv_chunk_delete_propagate (__nv_allocator_t *__alloc,
 __nvr_t __nv_chunk_yields_block_batch_locked (__nv_allocator_t *,
                                               void *, size_t);
 
-size_t __nv_rlslup(__nv_allocator_t *__alloc, size_t __lkgidx);
+inline size_t __nv_rlslup (__nv_allocator_t *__alloc, size_t __lkgidx)
+{
+    return (*(size_t (*) (size_t))__alloc->__al_ht[__NVH_RLSLUP]) (__lkgidx);
+}
+
+inline size_t __nv_lslup(__nv_allocator_t *__alloc, size_t __osize) {
+    return (*(size_t (*) (size_t))__alloc->__al_ht[__NVH_LSLUP]) (__osize);
+}
 
 __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
                                __nv_heap_t *__heap, void **__obj);
@@ -191,7 +207,7 @@ __nvr_t __nv_block_alloc_object (__nv_allocator_t *__alloc,
                                  void **__obj);
 __nvr_t __nv_block_requests_lift(__nv_allocator_t *__alloc,
                                   __nv_lkg_t *__origin_lkg,
-                                  __nv_block_header_t *__block);
+                                  __nv_block_header_t *__blockh);
 
 #define __NV_LIKELY(x) __builtin_expect (!!(x), 1)
 #define __NV_UNLIKELY(x) __builtin_expect (!!(x), 0)
