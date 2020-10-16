@@ -34,13 +34,13 @@ __nvr_t __nv_heap_alloc_object (__nv_allocator_t *__alloc, __nv_heap_t *__heap,
 __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
                                __nv_heap_t *__heap, void **__obj)
 {
+#if __NVC_NULLCHECK
+    if (__alloc == NULL || __heap == NULL || __obj == NULL) return __NVR_INVALP;
+#endif
 #else
     /* __lkg only exists as an rvalue in __nv_heap_object, so we need to pull
      * that out as an lvalue here */
     __nv_lkg_t *__lkg = &__heap->__hp_lkgs[__lkgi];
-#endif
-#if __NVC_NULLCHECK
-    if (__alloc == NULL || __heap == NULL || __obj == NULL) return __NVR_INVALP;
 #endif
     __nv_block_header_t *__blcache
         = __atomic_load_n (&__lkg->lla__lkg_active, __ATOMIC_SEQ_CST);

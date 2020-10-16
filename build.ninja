@@ -18,10 +18,11 @@ rule cc
 rule link
     command = ccache $cc $ldflags $in -o $out
 
-build nova.o: cc nova.c | nova.h
-build nova-os.o: cc nova-os.c | nova.h
-build nova-tid.o: cc nova-tid.c | nova.h
-build nova-fast.o: cc nova-fast.c | nova.h
-build nova: link $
-    nova.o nova-os.o nova-tid.o nova-fast.o
+build build/nova.o: cc nova.c | nova.h
+build build/nova-os.o: cc nova-os.c | nova.h
+build build/nova-tid.o: cc nova-tid.c | nova.h
+build build/nova-fast.o: cc nova-fast.c | nova.h
+build build/nova-sync.o: cc nova-sync.c | nova.h
+build build/nova: link $
+    build/nova.o build/nova-os.o build/nova-tid.o build/nova-fast.o build/nova-sync.o
 

@@ -38,8 +38,6 @@ __nvr_t __nv_chunk_new (__nv_allocator_t *__alloc, __nv_chunk_t **__chunk)
     return __NVR_OK;
 }
 
-__nvr_t __nv_block_init (__nv_allocator_t *__alloc, void *__blmem);
-
 __nvr_t __nv_chunk_yields_block_batch_locked (__nv_allocator_t *__alloc,
                                               void *__chbase, size_t __nblocks)
 {
@@ -133,7 +131,7 @@ __nvr_t __nv_chunk_delete (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk,
     *__chunk_mknx = __chunk->__ch_chlsnx;
     /* use __chunk->__ch_nbyt instead of __alloc->__al_chsz because it's likely
      * on the same cache line as __ch_chlsnx */
-    __nvr_t r = __nv_os_chdealloc (__alloc, __chunk, __chunk->__ch_nbyt);
+    __nvr_t r = __nv_os_chdealloc (__alloc, __chunk);
     if (__nvr_iserr (r)) return r;
     return __NVR_OK;
 }
@@ -150,7 +148,7 @@ __nvr_t __nv_chunk_delete_propagate (__nv_allocator_t *__alloc,
     __nv_chunk_t *__tmp__chlsnx;
     do {
         __tmp__chlsnx = __chunk->__ch_chlsnx;
-        __nvr_t r = __nv_os_chdealloc (__alloc, __chunk, __chunk->__ch_nbyt);
+        __nvr_t r = __nv_os_chdealloc (__alloc, __chunk);
         if (__nvr_iserr (r)) {
             if (__errch != NULL) *__errch = __chunk;
             if (__errtl != NULL) *__errtl = __tmp__chlsnx;
@@ -379,10 +377,16 @@ _Bool __nvh (__nv_allocator_t *__alloc, __nv_heuristic_t __h, ...)
     va_start (__args, __h);
 
     switch (__h) {
-        case __NVH_CAN_TAKE_BLOCK:;
+        case __NVH_CAN_TAKE_BLOCK:
             __r = (*(_Bool (*) (__nv_allocator_t *,
                                 void *))__alloc->__al_ht[__h]) (
                 __alloc, va_arg (__args, __nv_lkg_t *));
+            break;
+        case __NVH_LSLUP:
+            __r = __nv_lslup(__alloc, va_arg(__args, size_t));
+            break;
+        case __NVH_RLSLUP:
+            __r = __nv_rlslup(__alloc, va_arg(__args, size_t));
             break;
         default: __r = NO; break;
     }
@@ -458,9 +462,9 @@ size_t __nvh_default_rlslup (size_t __lkgidx)
         return __nvh_dlslup_lut[__lkgidx];
     else {
         if (__lkgidx == 0) return 16lu;
-        double __intermezzo = pow (1.17F, __lkgidx + 17);
+        double __intermezzo = pow (1.17F, (double)__lkgidx + 17);
         if (__intermezzo > 244) {
-            __intermezzo = __nvh_dlup_powgt244 * pow (__lkgidx - 4, 2.75254F);
+            __intermezzo = __nvh_dlup_powgt244 * pow ((double)__lkgidx - 4, 2.75254F);
             __intermezzo += 16.;
         }
         return 0x7fffffffl - (long)((double)0x7fffffffl - __intermezzo);
@@ -473,5 +477,5 @@ size_t __nvh_default_lslup (size_t __osz)
     if (__osz <= 17) return ((long)__osz - 16) > 0;
     --__osz;
     if (__osz <= 244) { return (log2 (__osz) / __nvh_dlup_log2blt244) - 17; }
-    return pow ((__osz - 16) / __nvh_dlup_powgt244, __nvh_dlup_divgt244) + 4;
+    return pow (((double)__osz - 16) / __nvh_dlup_powgt244, __nvh_dlup_divgt244) + 4;
 }

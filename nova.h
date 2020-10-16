@@ -21,6 +21,8 @@ typedef enum {
     __NVR_OS = 100,
     __NVR_OS_ALLOC = __NVR_OS + 0,
     __NVR_OS_ALIGN = __NVR_OS + 1,
+    __NVR_OS_CHUNK_DEALLOC = __NVR_OS + 2,
+    __NVR_OS_ALLOC_SMALL = __NVR_OS + 3,
 
     __NVR_ALLOC = 200,
     __NVR_ALLOC_OSIZE = __NVR_ALLOC + 0,
@@ -34,6 +36,8 @@ typedef enum {
     __NVR_TID_INSUFFICIENT_TIDS = __NVR_TID + 0,
     __NVR_TID_SYS_UNINITIALIZED = __NVR_TID + 1,
     __NVR_TID_THR_UNINITIALIZED = __NVR_TID + 2,
+    __NVR_SYNC_MUTEX = 1010,
+    __NVR_SYNC_MUTEX_INIT = __NVR_SYNC_MUTEX + 0,
 } __nvr_t;
 #define __nvr_iserr(e) (__NVR_FAIL < (e))
 
@@ -45,15 +49,18 @@ typedef struct
 {
 
 } __nv_parkinglot_t;
+#include <pthread.h>
 typedef struct
 {
-    uint8_t __l_inner;
+/*    uint8_t __l_inner;
+ */
+    pthread_mutex_t __l_inner;
 } __nv_lock_t;
 
-__nvr_t __nv_lock_init (__nv_lock_t *lock);
-__nvr_t __nv_lock_destroy (__nv_lock_t *lock);
-__nvr_t __nv_lock (__nv_lock_t *lock);
-__nvr_t __nv_unlock (__nv_lock_t *lock);
+__nvr_t __nv_lock_init (__nv_lock_t *__lock);
+__nvr_t __nv_lock_destroy (__nv_lock_t *__lock);
+__nvr_t __nv_lock (__nv_lock_t *__lock);
+__nvr_t __nv_unlock (__nv_lock_t *__lock);
 
 /* aligned(8) might actually slow things down (cache eviction)
  */
@@ -98,6 +105,8 @@ typedef struct
     size_t __ch_nblk;
     size_t __ch_nbyt;
 } __nv_chunk_t;
+#define __NV_CHPTRFLMASK 0x7lu
+#define __NV_CHPTRFL_ALLOC_MACOS_VM 0x01lu
 
 typedef enum {
     __NVH_LSLUP = 0,
@@ -147,12 +156,10 @@ typedef struct
 
 #define __NV_NULL_TID 0ul
 
-__nvr_t __nv_os_set_smalloc_agent (__nv_allocator_t *__alloc);
 __nvr_t __nv_os_smalloc (void **__mem, size_t size);
-__nvr_t __nv_os_smdealloc (void **__mem, size_t size);
+__nvr_t __nv_os_smdealloc (void *__mem, size_t size);
 __nvr_t __nv_os_challoc (__nv_allocator_t *__alloc, void **__mem);
-__nvr_t __nv_os_chdealloc (__nv_allocator_t *__alloc, void *__mem,
-                           size_t __size);
+__nvr_t __nv_os_chdealloc (__nv_allocator_t *__alloc, __nv_chunk_t *__ch);
 
 __nvr_t __nv_tid_thread_init ();
 __nvr_t __nv_tid_thread_destroy ();
