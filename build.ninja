@@ -11,18 +11,19 @@ cflags = -Wall -Wextra -g3 -O0 -ffreestanding -fPIC -fcolor-diagnostics -pipe $
 ldflags = -g3 -O0 -ffreestanding -fPIC -fcolor-diagnostics -pipe $
     -flto=thin -flto-jobs=6 -fsplit-lto-unit -fwhole-program-vtables $
     -fdollars-in-identifiers -finline-functions -fno-ms-compatibility -fno-rtti $
-    -nobuiltininc -Wno-unused-command-line-argument
+    -nobuiltininc -Wno-unused-command-line-argument -L/usr/local/opt/llvm/lib -lc++
 
 rule cc
     command = ccache $cc -c $cflags $in -o $out
 rule link
     command = ccache $cc $ldflags $in -o $out
 
+build build/main.o: cc main.cc | nova.h
 build build/nova.o: cc nova.c | nova.h
 build build/nova-os.o: cc nova-os.c | nova.h
 build build/nova-tid.o: cc nova-tid.c | nova.h
 build build/nova-fast.o: cc nova-fast.c | nova.h
 build build/nova-sync.o: cc nova-sync.c | nova.h
 build build/nova: link $
-    build/nova.o build/nova-os.o build/nova-tid.o build/nova-fast.o build/nova-sync.o
+    build/main.o build/nova.o build/nova-os.o build/nova-tid.o build/nova-fast.o build/nova-sync.o
 

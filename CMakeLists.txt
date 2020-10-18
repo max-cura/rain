@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.18)
 project(nova
         LANGUAGES C CXX)
 
-add_executable(nova nova.c nova.h nova-os.c nova-tid.c nova-fast.c nova-sync.c)
+add_executable(nova nova.c nova.h nova-os.c nova-tid.c nova-fast.c nova-sync.c main.cc)
 target_compile_options(nova
         PUBLIC
         -Wall -Wextra -g3 -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe

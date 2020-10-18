@@ -27,14 +27,24 @@ static __nv_tidmgr_t __nv_tidmgr__;
  */
 __nvr_t __nv_tid_thread_init_mono ()
 {
+#if __NV_TRACE
+    printf ("[trace]\ttid thread-init:mono\n");
+#endif
     __nv_lock (&__nv_tidmgr__.__tidlck);
     /* If the monotonic counter is in an exhausted state, then ignore. */
     if (__atomic_load_n (&__nv_tidmgr__.__tidmfl, __ATOMIC_SEQ_CST)
         & __NV_TIDSYS_MONOEXHAUSTED) {
+#if __NV_TRACE
+        printf ("[trace]\t> monotonic counter exhausted, counterstate: %llu\n",
+                __atomic_load_n (
+                    &(((__nv_tidmgr_monotonic_t *)(__nv_tidmgr__.__tidmun))
+                          ->__mono),
+                    __ATOMIC_SEQ_CST));
+#endif
         __nv_unlock (&__nv_tidmgr__.__tidlck);
         return __NVR_TID_INSUFFICIENT_TIDS;
     }
-    __nv_tidml__ = __atomic_fetch_add (
+    __nv_tidml__ = __atomic_add_fetch (
         &(((__nv_tidmgr_monotonic_t *)(__nv_tidmgr__.__tidmun))->__mono), 1lu,
         __ATOMIC_SEQ_CST);
     /* Overflow check */
@@ -181,6 +191,7 @@ __nvr_t __nv_tid_sys_init (uint64_t __fl)
         if (__nvr_iserr (r)) { return r; }
         __nv_lock_init (&__nv_tidmgr__.__tidlck);
         __mmgr->__mono = 0;
+        __nv_tidmgr__.__tidmun = (void *)__mmgr;
         return __NVR_OK;
     }
 }
