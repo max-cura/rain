@@ -3,4 +3,5 @@ nova
 .ninja_*
 .idea
 cmake-build-debug
-*.obuild
+*.o
+build

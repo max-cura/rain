@@ -10,6 +10,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define __NV_TRACE 1
+#define __NV_ENUMERATE_INNER_BLOCK_TRACE 1
+
 typedef enum {
     __NVR_OK = 0,
     __NVR_FAIL = 1,
@@ -119,7 +122,7 @@ typedef struct __nv_allocator_s
 {
     size_t __al_chsz;
     size_t __al_blksz;
-    size_t __al_hpnlkg;
+    size_t __al_hpnslkg;
     size_t __al_permtrytplvalloc;
     __nv_heap_t *__al_ghp;
     __nv_chunk_t *__al_chls;
@@ -186,14 +189,8 @@ __nvr_t __nv_chunk_delete_propagate (__nv_allocator_t *__alloc,
 __nvr_t __nv_chunk_yields_block_batch_locked (__nv_allocator_t *,
                                               void *, size_t);
 
-inline size_t __nv_rlslup (__nv_allocator_t *__alloc, size_t __lkgidx)
-{
-    return (*(size_t (*) (size_t))__alloc->__al_ht[__NVH_RLSLUP]) (__lkgidx);
-}
-
-inline size_t __nv_lslup(__nv_allocator_t *__alloc, size_t __osize) {
-    return (*(size_t (*) (size_t))__alloc->__al_ht[__NVH_LSLUP]) (__osize);
-}
+size_t __nv_rlslup (__nv_allocator_t *__alloc, size_t __lkgidx);
+size_t __nv_lslup(__nv_allocator_t *__alloc, size_t __osize);
 
 __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
                                __nv_heap_t *__heap, void **__obj);
@@ -215,6 +212,11 @@ __nvr_t __nv_block_alloc_object (__nv_allocator_t *__alloc,
 __nvr_t __nv_block_requests_lift(__nv_allocator_t *__alloc,
                                   __nv_lkg_t *__origin_lkg,
                                   __nv_block_header_t *__blockh);
+
+size_t __nvh_daslslup(size_t __osz);
+
+__nvr_t __nv_heap_alloc_object(__nv_allocator_t *__alloc, __nv_heap_t *__heap,
+                                size_t __osz, void **__obj);
 
 #define __NV_LIKELY(x) __builtin_expect (!!(x), 1)
 #define __NV_UNLIKELY(x) __builtin_expect (!!(x), 0)

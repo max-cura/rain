@@ -11,7 +11,15 @@ __nvr_t __nv_heap_alloc_object (__nv_allocator_t *__alloc, __nv_heap_t *__heap,
 #if __NVC_NULLCHECK
     if (__alloc == NULL || __heap == NULL || __obj == NULL) return __NVR_INVALP;
 #endif
+#if __NV_TRACE
+    printf ("[trace]\theap alloc-object [%p %p %zu (%zx) %p]\n", __alloc,
+            __heap, __osize, __osize, __obj);
+#endif
     const size_t __lkgi = __nv_lslup (__alloc, __osize);
+#if __NV_TRACE
+    printf ("[trace]\t> slup translation: %zu [%p]\n", __lkgi,
+            __heap->__hp_lkgs + __lkgi);
+#endif
 #if __NVC_LKGNRANGECHECK
     if (__lkgi >= __alloc->__al_hpnlkg) return __NVR_ALLOC_OSIZE;
     if (__lkgi == 0) {
@@ -34,20 +42,30 @@ __nvr_t __nv_heap_alloc_object (__nv_allocator_t *__alloc, __nv_heap_t *__heap,
 __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
                                __nv_heap_t *__heap, void **__obj)
 {
-#if __NVC_NULLCHECK
+    #if __NVC_NULLCHECK
     if (__alloc == NULL || __heap == NULL || __obj == NULL) return __NVR_INVALP;
-#endif
+    #endif
 #else
     /* __lkg only exists as an rvalue in __nv_heap_object, so we need to pull
      * that out as an lvalue here */
     __nv_lkg_t *__lkg = &__heap->__hp_lkgs[__lkgi];
 #endif
+#if __NV_TRACE
+    printf ("[trace]\tlinkage alloc-object [%p %p %p %p]\n", __alloc, __lkg,
+            __heap, __obj);
+#endif
     __nv_block_header_t *__blcache
         = __atomic_load_n (&__lkg->lla__lkg_active, __ATOMIC_SEQ_CST);
+#if __NV_TRACE
+    printf ("[trace]\t> initial head is %p\n", __blcache);
+#endif
 
     /* NULL HEAD CASE */
 
     if (__NV_UNLIKELY (__blcache == NULL)) {
+#if __NV_TRACE
+        printf ("[trace]\t>> branch: initial head NULL\n");
+#endif
         /* given lla__lkg_active == NULL, lla__lkg_active will not spuriously
          * change. */
         __nv_lock (&__lkg->__lkg_ll);
@@ -80,8 +98,11 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
 
     /* STANDARD CASE */
 
-    if (__NV_LIKELY (!__nvr_iserr (
-            __nv_block_alloc_object (__alloc, __blcache, __obj)))) {
+    if (__NV_LIKELY (__NVR_OK ==
+            __nv_block_alloc_object (__alloc, __blcache, __obj))) {
+#if __NV_TRACE
+        printf ("[trace]\t>> branch: initial head non-null, standard case\n");
+#endif
         return __NVR_OK;
     }
 
@@ -93,6 +114,9 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
      * help eliminate branch cost? */
     if (__blcache->ll__bh_chnx != NULL) {
         __nv_lock (&__blcache->__bh_glck);
+#if __NV_TRACE
+        printf ("[trace]\t>> branch: slide case\n");
+#endif
         /* Manually check if we're slideable; along the way, remove and
          * cauterize any blocks that are getting lifted.
          *
@@ -134,6 +158,10 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
             }
         }
         if (__slideable == YES) {
+#if __NV_TRACE
+            printf ("[trace]\t>>> slide successful, resultant: %p\n",
+                    __blcache);
+#endif
             /* Guarantee: __blcache->ll__bh_chnx exists, and is not being
              * lifted.
              */
@@ -164,9 +192,18 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
                                             __obj);
 #endif
         }
+#if __NV_TRACE
+        else {
+            printf ("[trace]\t>>> slide unsuccessful\n");
+        }
+#endif
     }
 
     /* PULL CASE */
+
+#if __NV_TRACE
+    printf ("[trace]\t>> defaulting to pull case...\n");
+#endif
 
     __nv_lock (&__blcache->__bh_glck);
     __nv_block_header_t *__tmpbl;
@@ -174,7 +211,16 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
         __nvr_t r = __nv_lkg_req_block_from_heap (__alloc, __heap,
                                                   __lkg->__lkg_idx, &__tmpbl);
         /* lkg RBFH will ignore lifted blocks */
-        if (__nvr_iserr (r)) return r;
+        if (__nvr_iserr (r)) {
+#if __NV_TRACE
+            printf ("[trace]\t>>> block request unsuccessful\n");
+#endif
+            return r;
+        }
+#if __NV_TRACE
+        printf ("[trace]\t>>> block request successful, resultant [%p]\n",
+                __tmpbl);
+#endif
         __atomic_or_fetch (&__tmpbl->a__bh_flag, __NV_BLHDRFL_LKGHD,
                            __ATOMIC_SEQ_CST);
         __atomic_store_n (&__tmpbl->a__bh_tid, __nv_tid (), __ATOMIC_SEQ_CST);
@@ -211,17 +257,37 @@ __nvr_t __nv_block_alloc_object (__nv_allocator_t *__alloc,
     if (__alloc == NULL || __blockh == NULL || __obj == NULL)
         return __NVR_INVALP;
 #endif
+#if __NV_TRACE
+    printf ("[trace]\tblock alloc-object [%p %p %p]\n", __alloc, __blockh,
+            __obj);
+    printf ("[trace]\t\t| fpl=%p, acnt=%hu\n", __blockh->__bh_fpl,
+            __atomic_load_n (&__blockh->a__bh_acnt, __ATOMIC_SEQ_CST));
+#endif
     if (__NV_LIKELY (__blockh->__bh_fpl != NULL)) {
+#if __NV_TRACE
+        printf ("[trace]\t> fpl not null\n");
+#endif
         return __nv_block_alloc_object_inner (__alloc, __blockh, __obj);
     } else {
+#if __NV_TRACE
+        printf ("[trace]\t> fpl null, trying fpg\n");
+#endif
         __nv_lock (&__blockh->__bh_glck);
         /* works on x86-64 */
         /* note: we don't actually want this to be atomic; luckily enough,
          * this just evaluates to a pair of `mov`s and an `xchg` */
         __blockh->__bh_fpl = __atomic_exchange_n (&__blockh->gl__bh_fpg, NULL,
                                                   __ATOMIC_SEQ_CST);
+#if __NV_TRACE
+        printf ("[trace]\t> fpl <-> fpg swapped, fpl now [%p]\n",
+                __blockh->__bh_fpl);
+#endif
         __nv_unlock (&__blockh->__bh_glck);
         if (__NV_LIKELY (__blockh->__bh_fpl != NULL)) {
+#if __NV_TRACE
+            printf ("[trace]\t>> fpl <-> fpg swap successful, proceeding with "
+                    "allocation\n");
+#endif
             return __nv_block_alloc_object_inner (__alloc, __blockh, __obj);
         }
         return __NVR_FAIL;

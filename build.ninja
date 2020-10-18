@@ -4,11 +4,11 @@
 #
 
 cc = /usr/local/opt/llvm/bin/clang
-cflags = -Wall -Wextra -g3 -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe $
+cflags = -Wall -Wextra -g3 -O0 -ffreestanding -fPIC -fcolor-diagnostics -pipe $
     -fdollars-in-identifiers -finline-functions -fno-ms-compatibility -fno-rtti -I. $
     -Wno-unused-parameter $
     -Wno-unused-command-line-argument -Wno-nullability-completeness -Wno-expansion-to-defined -Wall -Wextra
-ldflags = -g3 -O3 -ffreestanding -fPIC -fcolor-diagnostics -pipe $
+ldflags = -g3 -O0 -ffreestanding -fPIC -fcolor-diagnostics -pipe $
     -flto=thin -flto-jobs=6 -fsplit-lto-unit -fwhole-program-vtables $
     -fdollars-in-identifiers -finline-functions -fno-ms-compatibility -fno-rtti $
     -nobuiltininc -Wno-unused-command-line-argument

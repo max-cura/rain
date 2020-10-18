@@ -5,15 +5,76 @@
 
 #include "nova.h"
 
+size_t __nvh_drlslup (size_t __li)
+{
+    --__li;
+    return (16ul << (__li >> 1)) + ((__li & 1) << ((__li >> 1) + 3));
+}
+
+size_t __nvh_dlslup (size_t __osz)
+{
+    if (__osz <= 16) return 1;
+    size_t __nlz;
+    size_t __res = (__nlz = 63 - __builtin_clzl (__osz))
+                       ? (2 * __nlz) - !(~(1 << __nlz) & __osz)
+                             + ((1 << (__nlz - 1)) & __osz
+                                && ~(3 << (__nlz - 1)) & __osz)
+                             - 7
+                       : 0;
+    return __res + 1;
+}
+
+_Bool __nvh_ctb (__nv_allocator_t *__attribute__ ((unused)) __alloc,
+                 __nv_lkg_t *__lkg)
+{
+    return __lkg->ll__lkg_nblk < 32;
+}
+
+#include <stdlib.h>
+
 int main (int __attribute__ ((unused)) argc,
           char **__attribute__ ((unused)) argv)
 {
     printf ("Saluto il nuovo mondo\n");
-    __nv_allocator_t alloc;
-    alloc.__al_chsz = 0x800000000;
-    void *mem = NULL;
-    __nvr_t r = __nv_os_challoc (&alloc, &mem);
-    printf ("%i, %p\n", r, mem);
+    __nv_allocator_t alloc = { .__al_chsz = 0x100000,
+                               .__al_blksz = 0x4000,
+                               .__al_hpnslkg = 19,
+                               .__al_permtrytplvalloc = 1,
+                               .__al_ghp = NULL,
+                               .__al_chls = NULL,
+                               .__al_ht = {
+                                   __nvh_dlslup,
+                                   __nvh_drlslup,
+                                   __nvh_ctb,
+                               } };
+    __nv_heap_t *tlhp
+        = malloc (sizeof (void *) + sizeof (size_t)
+                  + sizeof (__nv_lkg_t) * (alloc.__al_hpnslkg + 1));
+    __nv_heap_t *flhp = malloc (
+        sizeof (size_t) + sizeof (__nv_lkg_t) * (alloc.__al_hpnslkg + 1));
+    *(size_t *)tlhp = 1;
+    tlhp = (__nv_heap_t *)(&((size_t *)tlhp)[1]);
+    alloc.__al_ghp = tlhp;
+    tlhp->__hp_parent = NULL;
+    flhp->__hp_parent = tlhp;
+    for (size_t i = 0; i <= alloc.__al_hpnslkg; ++i) {
+        tlhp->__hp_lkgs[i].lla__lkg_active = NULL;
+        __nv_lock_init (&tlhp->__hp_lkgs[i].__lkg_ll);
+        tlhp->__hp_lkgs[i].__lkg_idx = i;
+        tlhp->__hp_lkgs[i].ll__lkg_nblk = 0;
+
+        flhp->__hp_lkgs[i].lla__lkg_active = NULL;
+        __nv_lock_init (&flhp->__hp_lkgs[i].__lkg_ll);
+        flhp->__hp_lkgs[i].__lkg_idx = i;
+        flhp->__hp_lkgs[i].ll__lkg_nblk = 0;
+    }
+
+    void *obj = NULL;
+    for (size_t i = 0; i < 5; ++i) {
+        __nv_heap_alloc_object (&alloc, flhp, 0x1000, &obj);
+        printf ("%p\n", obj);
+    }
+
     return 0;
 }
 
@@ -68,10 +129,10 @@ __nvr_t __nv_alloc_chls_add (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk)
     return __NVR_OK;
 }
 
-__nvr_t __nv_toplvl_alloc_block (__nv_allocator_t *__alloc,
+__nvr_t __nv_toplvl_alloc_block (__nv_allocator_t *__alloc, __nv_heap_t *__heap,
                                  __nv_block_header_t **__blockhp)
 {
-    __nv_lkg_t *__lkg = &__alloc->__al_ghp->__hp_lkgs[0];
+    __nv_lkg_t *__lkg = &__heap->__hp_lkgs[0];
     {
         __nv_chunk_t *__chunk;
         __nv_lock (&__lkg->__lkg_ll);
@@ -187,8 +248,13 @@ __nvr_t __nv_block_fmt (__nv_allocator_t *__alloc, __nv_block_header_t *__bh,
 #if __NVC_FMT_OSZ_SANITY
     if (__osz < __NV_HW_CACHELINE_SIZE) { return __NVR_CACHEINVAL; }
 #endif
+#if __NV_TRACE
+    printf ("[trace]\tblock format [%p %p %zu (%zx)]\n", __alloc, __bh, __osz,
+            __osz);
+#endif
     uint8_t *__bhm = (uint8_t *)__bh + __NV_BLOCK_MEMORY_OFFSET;
-    __bh->__bh_fpl = __bh;
+    __bh->__bh_fpl = __bhm;
+    __bh->gl__bh_fpg = NULL;
     __bh->__bh_osz = __osz;
     __bh->__bh_ocnt = __alloc->__al_blksz / __bh->__bh_osz;
     __bh->a__bh_flag = 0;
@@ -198,12 +264,16 @@ __nvr_t __nv_block_fmt (__nv_allocator_t *__alloc, __nv_block_header_t *__bh,
     /* start from near the header because that gives us better cache locality
      * for a lot of situations */
     for (size_t i = 0; i < __bh->__bh_ocnt; ++i) {
-        *(void **)__bhm = (void *)__bhm + __osz;
-        __bhm += __osz;
+        *(void **)__bhm = (uint8_t *)__bhm + __osz;
+#if __NV_TRACE && __NV_ENUMERATE_INNER_BLOCK_TRACE
+        printf ("[trace]\t> [%zu]: %p -> %p\n", i, __bhm, *(void **)__bhm);
+#endif
+        __bhm = (void *)((uint8_t *)__bhm + __osz);
     }
     /* handle last object */
-    __bhm -= __osz;
+    __bhm = (void*)((uint8_t *)__bhm - __osz);
     *(void **)__bhm = NULL;
+    printf("[trace]\t> [final (rewind)] %p -> %p\n", __bhm, *(void**)__bhm);
     return __NVR_OK;
 }
 
@@ -288,11 +358,21 @@ __nvr_t __nv_heap_req_block_from_ulkg (__nv_allocator_t *__alloc,
     }
 }
 
-inline _Bool __nv_heap_is_toplvl (__nv_allocator_t *__attribute__ ((unused))
-                                  __alloc,
-                                  __nv_heap_t *__heap)
+size_t __nv_rlslup (__nv_allocator_t *__alloc, size_t __lkgidx)
 {
-    return __heap->__hp_parent != NULL;
+    return (*(size_t (*) (size_t))__alloc->__al_ht[__NVH_RLSLUP]) (__lkgidx);
+}
+
+size_t __nv_lslup (__nv_allocator_t *__alloc, size_t __osize)
+{
+    return (*(size_t (*) (size_t))__alloc->__al_ht[__NVH_LSLUP]) (__osize);
+}
+
+
+_Bool __nv_heap_is_toplvl (__nv_allocator_t *__attribute__ ((unused)) __alloc,
+                           __nv_heap_t *__heap)
+{
+    return __heap->__hp_parent == NULL;
 }
 
 __nvr_t __nv_heap_req_block_from_heap (__nv_allocator_t *__alloc,
@@ -309,6 +389,10 @@ __nvr_t __nv_heap_req_block_from_heap (__nv_allocator_t *__alloc,
 #if __NVC_LKGNRANGECHECK
     if (__lkg_idx >= __alloc->__al_hpnlkg) return __NVR_ALLOC_LKG_IDX_RANGE;
 #endif
+#if __NV_TRACE
+    printf ("[trace]\theap req-block-from-heap [%p %p %zu %p]\n", __alloc,
+            __heap, __lkg_idx, __blockhp);
+#endif
     __nvr_t r;
     r = __nv_heap_req_block_from_slkg (__alloc, &__heap->__hp_lkgs[__lkg_idx],
                                        __blockhp);
@@ -320,8 +404,13 @@ __nvr_t __nv_heap_req_block_from_heap (__nv_allocator_t *__alloc,
     if (__NV_UNLIKELY (__nv_heap_is_toplvl (__alloc, __heap))) {
         size_t attempts = 0lu;
         while (attempts++ < __alloc->__al_permtrytplvalloc) {
-            r = __nv_toplvl_alloc_block (__alloc, __blockhp);
+            r = __nv_toplvl_alloc_block (__alloc, __heap, __blockhp);
             if (r == __NVR_OK) {
+#if __NV_TRACE
+                printf ("[trace]\t> rlslup translation [%zu -> %zu (%zx)]\n",
+                        __lkg_idx, __nv_rlslup (__alloc, __lkg_idx),
+                        __nv_rlslup (__alloc, __lkg_idx));
+#endif
                 __nv_block_fmt (__alloc, *__blockhp,
                                 __nv_rlslup (__alloc, __lkg_idx));
                 return __NVR_OK;
@@ -383,10 +472,10 @@ _Bool __nvh (__nv_allocator_t *__alloc, __nv_heuristic_t __h, ...)
                 __alloc, va_arg (__args, __nv_lkg_t *));
             break;
         case __NVH_LSLUP:
-            __r = __nv_lslup(__alloc, va_arg(__args, size_t));
+            __r = __nv_lslup (__alloc, va_arg (__args, size_t));
             break;
         case __NVH_RLSLUP:
-            __r = __nv_rlslup(__alloc, va_arg(__args, size_t));
+            __r = __nv_rlslup (__alloc, va_arg (__args, size_t));
             break;
         default: __r = NO; break;
     }
@@ -440,7 +529,8 @@ __nvr_t __nv_block_requests_lift (__nv_allocator_t *__alloc,
     return __nv_heap_catch (__alloc, __heap, __blockh, __origin_lkg->__lkg_idx);
 }
 
-#include <math.h>
+#if 0
+    #include <math.h>
 
 /* log2(1.17) ~ 0.226509*/
 static const double __nvh_dlup_log2blt244 = (double)0x3fccfe3b43e58b88ul;
@@ -479,3 +569,4 @@ size_t __nvh_default_lslup (size_t __osz)
     if (__osz <= 244) { return (log2 (__osz) / __nvh_dlup_log2blt244) - 17; }
     return pow (((double)__osz - 16) / __nvh_dlup_powgt244, __nvh_dlup_divgt244) + 4;
 }
+#endif
