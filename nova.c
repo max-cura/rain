@@ -12,9 +12,19 @@ size_t __nv_chunk_nblocks (__nv_allocator_t *__alloc, size_t __meml)
 
 __nvr_t __nv_chunk_new (__nv_allocator_t *__alloc, __nv_chunk_t **__chunk)
 {
+#if __NV_TRACE
+    printf("[trace]\tchunk new [%p %p]\n", __alloc, __chunk);
+#endif
     void *__chmem = NULL;
     __nvr_t r = __nv_os_challoc (__alloc, &__chmem);
-    if (__nvr_iserr (r)) return r;
+    if (__nvr_iserr (r)) {
+#if __NV_TRACE
+        printf("[trace]\t> chunk allocation failed\n");
+#endif
+    return r; }
+#if __NV_TRACE
+    printf("[trace]\t> chunk allocation successful ([%p])\n", __chmem);
+#endif
     *__chunk = (__nv_chunk_t *)(__chmem);
     (*__chunk)->__ch_chlsnx = NULL;
     (*__chunk)->__ch_nblk = __nv_chunk_nblocks (
@@ -29,13 +39,20 @@ __nvr_t __nv_chunk_new (__nv_allocator_t *__alloc, __nv_chunk_t **__chunk)
 __nvr_t __nv_chunk_yields_block_batch_locked (__nv_allocator_t *__alloc,
                                               void *__chbase, size_t __nblocks)
 {
+#if __NV_TRACE
+    printf("[trace]\tchunk yields-block-batch(locked) [%p %p %zu (%zx)]\n", __alloc,
+            __chbase, __nblocks, __nblocks);
+#endif
     if (__nblocks == 0) return __NVR_OK;
     __nv_lkg_t *__lkg = &__alloc->__al_ghp->__hp_lkgs[0];
     __nv_block_header_t *__curr = ((__nv_block_header_t *)__chbase), *__next,
                         *__prev = NULL;
     __curr->ll__bh_chpr = NULL;
     for (size_t __bli = 0; __bli < __nblocks; ++__bli) {
-        __next = (__nv_block_header_t *)(((uint8_t *)__curr + 1)
+#if __NV_TRACE && __NV_ENUMERATE_INNER_CHUNK_TRACE
+        printf("[trace]> yielding block [%p]\n", __curr);
+#endif
+        __next = (__nv_block_header_t *)(((uint8_t *)(__curr + 1))
                                          + __alloc->__al_blksz);
         __curr->ll__bh_chnx = __next;
         __next->ll__bh_chpr = __curr;
@@ -86,6 +103,25 @@ __nvr_t __nv_toplvl_alloc_block (__nv_allocator_t *__alloc, __nv_heap_t *__heap,
     return __NVR_OK;
 }
 
+//__nvr_t __nv_chtbl_fchlkg(__nv_allocator_t *__alloc, __nv_chunk_t * __chunk,
+//                           __nv_chunktbl_lkg_t ** __lkg)
+//{
+//}
+//
+//__nvr_t __nv_chtbl_add(__nv_allocator_t *__alloc, __nv_chunk_t *__chunk)
+//{
+//    __nv_chunktbl_lkg_t *__chlkg;
+//    const __nvr_t r = __nv_chtbl_fchlkg(__alloc, __chunk, &__chlkg);
+//    if(r != __NVR_OK) {
+//        return r;
+//    }
+//    __nv_lock(&__chlkg->__chlkg_lck);
+//    __chunk->__ch_chtblnx = __atomic_load_n(&__chlkg->a__chlkg_chs, __ATOMIC_SEQ_CST);
+//    __atomic_store_n(&__chlkg->a__chlkg_chs, __chunk, __ATOMIC_SEQ_CST);
+//    __nv_unlock(&__chlkg->__chlkg_lck);
+//    return __NVR_OK;
+//}
+
 __nvr_t __nv_chunk_populate (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk)
 {
     const size_t __chnblk = __chunk->__ch_nblk;
@@ -103,6 +139,7 @@ __nvr_t __nv_chunk_populate (__nv_allocator_t *__alloc, __nv_chunk_t *__chunk)
         __choff += sizeof (__nv_block_header_t);
         __choff += __alloc->__al_blksz;
     }
+//    __nv_chtbl_add(__alloc, __chunk);
     /* Pass blocks in batch to allocator.
      */
     return __nv_chunk_yields_block_batch_locked (__alloc, __chbase,
@@ -442,8 +479,11 @@ __nvr_t __nv_block_requests_lift (__nv_allocator_t *__alloc,
                                   __nv_lkg_t *__origin_lkg,
                                   __nv_block_header_t *__blockh)
 {
+#if __NV_TRACE
+    printf("[\x1b[31mtrace\x1b[0m]\tblock requests-lift [%p %p %p]\n", __alloc, __origin_lkg, __blockh);
+#endif
     /* FPL, FPG set, <LL>, <GL> */
-    void *__heap = *(void **)((__origin_lkg - __origin_lkg->__lkg_idx) - 1);
+    void *__heap = (void *)((__origin_lkg - __origin_lkg->__lkg_idx));
     if (__blockh->ll__bh_chpr != NULL)
         __blockh->ll__bh_chpr->ll__bh_chnx = __blockh->ll__bh_chnx;
     if (__blockh->ll__bh_chnx != NULL)

@@ -17,6 +17,7 @@ extern "C"
 
 #define __NV_TRACE 1
 #define __NV_ENUMERATE_INNER_BLOCK_TRACE 1
+#define __NV_ENUMERATE_INNER_CHUNK_TRACE 0
 
     typedef enum {
         __NVR_OK = 0,
@@ -110,11 +111,21 @@ extern "C"
     typedef struct
     {
         void *__ch_chlsnx;
+        void *__ch_chtblnx;
         size_t __ch_nblk;
         size_t __ch_nbyt;
     } __nv_chunk_t;
 #define __NV_CHPTRFLMASK 0x7lu
 #define __NV_CHPTRFL_ALLOC_MACOS_VM 0x01lu
+//    typedef struct {
+//        __nv_lock_t *__chlkg_lck;
+//        __nv_chunk_t *a__chlkg_chs;
+//    } __nv_chunktbl_lkg_t;
+//    typedef struct
+//    {
+//        size_t __chtbl_sz;
+//        __nv_chunktbl_lkg_t __chtbl_ch_lkgs[];
+//    } __nv_chunktable_t;
 
     typedef enum {
         __NVH_LSLUP = 0,
@@ -133,6 +144,7 @@ extern "C"
         __nv_chunk_t *__al_chls;
 
         void *__al_ht[__NVH_NHEURISTICS];
+//        __nv_chunktable_t *__al_chtbl;
     } __nv_allocator_t;
 
     typedef struct __nv_tidmgr_recylsch
@@ -223,6 +235,7 @@ extern "C"
     __nvr_t __nv_heap_alloc_object (__nv_allocator_t *__alloc,
                                     __nv_heap_t *__heap, size_t __osz,
                                     void **__obj);
+    __nvr_t __nv_dealloc_object(__nv_allocator_t *__alloc, void *__obj);
 
 #define __NV_LIKELY(x) __builtin_expect (!!(x), 1)
 #define __NV_UNLIKELY(x) __builtin_expect (!!(x), 0)

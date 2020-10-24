@@ -78,6 +78,11 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
                                __ATOMIC_SEQ_CST);
             __atomic_store_n (&__tmpbl->a__bh_tid, __nv_tid (),
                               __ATOMIC_SEQ_CST);
+#if __NV_TRACE
+            printf ("[trace]\t>> assigned tid [%llu] to block [%p]\n",
+                    __atomic_load_n (&__tmpbl->a__bh_tid, __ATOMIC_SEQ_CST),
+                    __tmpbl);
+#endif
             __atomic_store_n (&__tmpbl->gl__bh_lkg, __lkg, __ATOMIC_SEQ_CST);
             __tmpbl->ll__bh_chnx = NULL;
             __tmpbl->ll__bh_chpr = NULL;
@@ -98,8 +103,8 @@ __nvr_t __nv_lkg_alloc_object (__nv_allocator_t *__alloc, __nv_lkg_t *__lkg,
 
     /* STANDARD CASE */
 
-    if (__NV_LIKELY (__NVR_OK ==
-            __nv_block_alloc_object (__alloc, __blcache, __obj))) {
+    if (__NV_LIKELY (__NVR_OK
+                     == __nv_block_alloc_object (__alloc, __blcache, __obj))) {
 #if __NV_TRACE
         printf ("[trace]\t>> branch: initial head non-null, standard case\n");
 #endif
@@ -316,15 +321,49 @@ __nvr_t
     return __NVR_OK;
 }
 
+__nvr_t __nv_dealloc_object (__nv_allocator_t *__alloc, void *__obj)
+{
+#if __NV_TRACE
+    printf ("[trace]\t<nova> dealloc object [%p %p]\n", __alloc, __obj);
+#endif
+    ptrdiff_t __choffset = (size_t)__obj % __alloc->__al_chsz;
+#if __NV_TRACE
+    printf ("[trace]\t> chunk offset [%p] -> [%p]\n", (void*)__choffset,
+            (void*)__choffset - sizeof (__nv_chunk_t));
+    printf("[trace]\t\t| chunk base [%p]\n", (uint8_t *)__obj - __choffset);
+#endif
+    //    __nv_chunk_t * __ch = (void *)((uint8_t *)__obj - __choffset);
+    __choffset -= sizeof (__nv_chunk_t);
+    __nv_block_header_t *__blockh;
+    ptrdiff_t __bloffset
+        = __choffset % (sizeof *__blockh + __alloc->__al_blksz);
+    __blockh = (void *)((uint8_t *)__obj - __bloffset);
+
+#if !__NV_STRICT_INLINE
+    return __nv_block_dealloc_object (__alloc, __blockh, __obj);
+}
+
 __nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc,
                                    __nv_block_header_t *__blockh, void *__obj)
 {
+#endif
+#if __NV_TRACE
+    printf ("[trace]\tblock dealloc-object [%p %p %p]\n", __alloc, __blockh,
+            __obj);
+    printf ("[trace]\t\t| b'tid=%llu tid=%llu\n",
+            __atomic_load_n (&__blockh->a__bh_tid, __ATOMIC_SEQ_CST),
+            __nv_tid ());
+#endif
     /* TID invalidation is a non-problem. */
     if (__NV_LIKELY (
             __nv_tid ()
             == __atomic_load_n (&__blockh->a__bh_tid, __ATOMIC_SEQ_CST))) {
         /* % local */
+#if __NV_TRACE
+        printf ("[trace]\t> branch local\n");
+#endif
         *(void **)__obj = __blockh->__bh_fpl;
+        __blockh->__bh_fpl = __obj;
 #if 0
         if (__NV_LIKELY (__blockh->__bh_fpl != NULL)) {
              *(uint16_t *)__obj = (uint8_t *)__blockh->__bh_fpl - ((uint8_t *)__blockh + __NV_BLOCK_MEMORY_OFFSET);
@@ -335,9 +374,13 @@ __nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc,
         }
 #endif
     } else {
+#if __NV_TRACE
+        printf ("[trace]\t> branch global\n");
+#endif
         /* % global */
         __nv_lock (&__blockh->__bh_glck);
         *(void **)__obj = __blockh->gl__bh_fpg;
+        __blockh->gl__bh_fpg = __obj;
 #if 0
         {
             if (__NV_LIKELY (__blockh->gl__bh_fpg != NULL)) {
@@ -356,7 +399,7 @@ __nvr_t __nv_block_dealloc_object (__nv_allocator_t *__alloc,
         __nv_lock (&__blockh->__bh_glck);
         if (0
             == (__atomic_load_n (&__blockh->a__bh_flag, __ATOMIC_SEQ_CST)
-                & __NV_BLHDRFL_LKGHD)) {
+                & (uint16_t)__NV_BLHDRFL_LKGHD)) {
             if (__atomic_load_n (&__blockh->a__bh_acnt, __ATOMIC_SEQ_CST)
                 == 0) {
                 void *__cfpl = __blockh->__bh_fpl,

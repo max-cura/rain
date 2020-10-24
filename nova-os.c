@@ -20,6 +20,7 @@ _Bool __nv_is_aligned_2m (size_t __s) { return (__s & 0x1ffffful) == 0; }
     #include <mach/mach.h>
 #endif
 #include <sys/mman.h>
+#include <stdlib.h>
 
 /* Chunk allocator
  */
@@ -62,8 +63,14 @@ __nvr_t __nv_os_challoc (__nv_allocator_t *__alloc, void **__mem)
     } else
 #endif
         if (__nv_is_aligned_4k (__alloc->__al_chsz)) {
+        /*
         *__mem = mmap (NULL, __alloc->__al_chsz, PROT_READ | PROT_WRITE,
                        MAP_ANON | MAP_PRIVATE, -1, 0);
+                       */
+        if(0 != posix_memalign(__mem, __alloc->__al_chsz, __alloc->__al_chsz)) {
+            *__mem = NULL;
+            return __NVR_OS_ALLOC;
+        }
     } else {
         return __NVR_OS_ALIGN;
     }
@@ -86,7 +93,8 @@ __nvr_t __nv_os_chdealloc (__nv_allocator_t *__attribute__ ((unused)) __alloc,
         return __NVR_OK;
     }
 #endif
-    if (0 != munmap (__ch, __ch->__ch_nbyt)) { return __NVR_OS_CHUNK_DEALLOC; }
+//    if (0 != munmap (__ch, __ch->__ch_nbyt)) { return __NVR_OS_CHUNK_DEALLOC; }
+    free(__ch);
     return __NVR_OK;
 }
 
