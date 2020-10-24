@@ -1,0 +1,44 @@
+#pragma once
+/*
+ * file MachineConfig.h.in [translated MachineConfig.h]
+ * author Maximilien M. Cura
+ */
+
+#cmakedefine RAIN_CFG_ALLOC_TRACE_SUPPORT
+#cmakedefine RAIN_CFG_RUNTIME_CHECKING_SUPPORT
+#cmakedefine RAIN_CFG_HIDE_BUILDINFO
+
+#define RAIN_BUILDINFO_VERSION "${Rain_VERSION}"
+#define RAIN_BUILDINFO_VERSION_MAJOR "${Rain_VERSION_MAJOR}"
+#define RAIN_BUILDINFO_VERSION_MINOR "${Rain_VERSION_MINOR}"
+#define RAIN_BUILDINFO_VERSION_PATCH "${Rain_VERSION_PATCH}"
+#define RAIN_BUILDINFO_LIBNAME "lib${RAIN_BUILDINFO_LIBNAME_PARTIAL}"
+
+#include <Rain/Compiler.h>
+#include <Rain/Config.h>
+
+namespace rain::buildinfo {
+#if !CFG(HIDE_BUILDINFO)
+    RAIN_API inline const char *const [[maybe_unused]] version_string = RAIN_BUILDINFO_VERSION;
+#else
+    inline const char *const [[maybe_unused]] version_string = RAIN_BUILDINFO_VERSION;
+#endif
+    struct Version
+    {
+        unsigned long major, minor, patch;
+    };
+#if !CFG(HIDE_BUILDINFO)
+    RAIN_API inline const Version [[maybe_unused]] version_number = {
+#else
+    inline const Version [[maybe_unused]] version_number = {
+#endif
+        .major = RAIN_BUILDINFO_VERSION_MAJOR,
+        .minor = RAIN_BUILDINFO_VERSION_MINOR,
+        .patch = RAIN_BUILDINFO_VERSION_PATCH,
+    };
+#if !CFG(HIDE_BUILDINFO)
+    RAIN_API inline const char *const [[maybe_unused]] libname = RAIN_BUILDINFO_LIBNAME;
+#else
+    inline const char *const [[maybe_unused]] libname = RAIN_BUILDINFO_LIBNAME;
+#endif
+}
