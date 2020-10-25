@@ -15,8 +15,8 @@ extern "C"
 #include <stdint.h>
 #include <stdio.h>
 
-#define __NV_TRACE 1
-#define __NV_ENUMERATE_INNER_BLOCK_TRACE 1
+#define __NV_TRACE 0
+#define __NV_ENUMERATE_INNER_BLOCK_TRACE 0
 #define __NV_ENUMERATE_INNER_CHUNK_TRACE 0
 
     typedef enum {
@@ -142,6 +142,8 @@ extern "C"
         size_t __al_permtrytplvalloc;
         __nv_heap_t *__al_ghp;
         __nv_chunk_t *__al_chls;
+
+        size_t __als_nchunk;
 
         void *__al_ht[__NVH_NHEURISTICS];
 //        __nv_chunktable_t *__al_chtbl;

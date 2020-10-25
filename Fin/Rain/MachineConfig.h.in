@@ -14,8 +14,8 @@
 #define RAIN_BUILDINFO_VERSION_PATCH "${Rain_VERSION_PATCH}"
 #define RAIN_BUILDINFO_LIBNAME "lib${RAIN_BUILDINFO_LIBNAME_PARTIAL}"
 
-#include <Rain/Compiler.h>
-#include <Rain/Config.h>
+#include <Fin/Rain/Compiler.h>
+#include <Fin/Rain/Config.h>
 
 namespace rain::buildinfo {
 #if !CFG(HIDE_BUILDINFO)

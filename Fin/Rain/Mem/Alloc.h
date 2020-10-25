@@ -4,11 +4,11 @@
 // author Maximilien M. Cura
 //
 
-#include <Rain/Compiler.h>
-#include <Rain/Math/Integers.h>
-#include <Rain/Math/Util.h>
-#include <Rain/Lang/Maybe.h>
-#include <Rain/Sync/Locks.h>
+#include <Fin/Rain/Compiler.h>
+#include <Fin/Rain/Math/Integers.h>
+#include <Fin/Rain/Math/Util.h>
+#include <Fin/Rain/Lang/Maybe.h>
+#include <Fin/Rain/Sync/Locks.h>
 
 namespace rain::mem {
     struct Allocator
